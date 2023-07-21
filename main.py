@@ -16,9 +16,12 @@ from settings import SiteSettings
 def edit_pub(pub_id: str, text: str, driver, edit_url) -> None:
     driver.get(edit_url + pub_id)
     textarea = driver.find_element(By.NAME, 'FIELDS[PREVIEW_TEXT]')
+
     textarea.clear()
     textarea.send_keys(text)
-    save_button = driver.find_element(By.CSS_SELECTOR, 'button[name="ACTION"][value="H"]')
+
+    # save_button = driver.find_element(By.CSS_SELECTOR, 'button[name="ACTION"][value="H"]')
+    save_button = driver.find_element(By.CSS_SELECTOR, 'button[name="ACTION"][value="Y"]')
     save_button.click()
     WebDriverWait(driver, 10).until(EC.staleness_of(save_button))
 
@@ -34,14 +37,14 @@ def main():
     start_year = 2018
 
     replacement_dict = {
-        '3.0.57.17 - 3.0.137.39': '3.0.57.17 - 3.0.138.24',  # Бухгалтерия предприятия
-        '1.6.13.38 - 3.0.4.65': '1.6.13.38 - 3.0.4.88',  # Управление нашей фирмой
-        '2.2.10.19 - 3.0.4.65': '2.2.10.19 - 3.0.4.88',  # Розница
-        '3.1.17.138 - 3.1.26.11': '3.1.17.138 - 3.1.26.11',  # ЗиКГУ и ЗУП
-        '3.1.8.216 - 3.1.26.11': '3.1.8.216 - 3.1.26.11',  # ЗиКГУ и ЗУП
-        '2.4.5.86 - 2.5.12.64': '2.4.5.86 - 2.5.12.73',  # Комплексная автоматизация
-        '2.4.7.151 - 2.5.12.64': '2.4.7.151 - 2.5.12.73',  # ERP Управление предприятием
-        '11.4.1.254 - 11.5.12.64': '11.4.1.254 - 11.5.12.73'  # Управление торговлей
+        '3.0.57.17 - 3.0.138.25': '3.0.57.17 - 3.0.140.20',  # Бухгалтерия предприятия
+        '1.6.13.38 - 3.0.4.88': '1.6.13.38 - 3.0.4.128',  # Управление нашей фирмой
+        '2.2.10.19 - 3.0.4.88': '2.2.10.19 - 3.0.4.128',  # Розница
+        '3.1.17.138 - 3.1.26.13': '3.1.17.138 - 3.1.26.13',  # ЗиКГУ и ЗУП
+        '3.1.8.216 - 3.1.26.13': '3.1.8.216 - 3.1.26.13',  # ЗиКГУ и ЗУП
+        '2.4.5.86 - 2.5.12.80': '2.4.5.86 - 2.5.12.87',  # Комплексная автоматизация
+        '2.4.7.151 - 2.5.12.80': '2.4.7.151 - 2.5.12.87',  # ERP Управление предприятием
+        '11.4.1.254 - 11.5.12.80': '11.4.1.254 - 11.5.12.87'  # Управление торговлей
     }
 
     # Получение значений из конфигурационного файла
@@ -85,8 +88,8 @@ def main():
                     soup = BeautifulSoup(html_content, 'html.parser')
 
                     # Находим элементы, содержащие информацию о публикациях
-                    publication_elements = soup.find_all('div', class_='publication-item')
-                    # publication_elements = soup.select('div.publication-item:not(.unactive)')
+                    # publication_elements = soup.find_all('div', class_='publication-item')
+                    publication_elements = soup.select('div.publication-item:not(.unactive)')
 
                     # Обходим элементы публикаций и извлекаем информацию
                     for publication_element in publication_elements:
@@ -103,13 +106,13 @@ def main():
                             for key, value in replacement_dict.items():
                                 if key in preview_text:
                                     preview_text = preview_text.replace(key, value)
-                                selected_urls[link.split('/')[2]] = preview_text
+                                    selected_urls[link.split('/')[2]] = preview_text
 
                 else:
                     print("Не удалось получить данные:", response.status_code)
-            print(selected_urls)
-            print(len(selected_urls))
+
             # Создаем экземпляр сервиса GeckoDriver
+            print(selected_urls.keys())
             service = Service(executable_path=driver_path)
             # Создать экземпляр драйвера браузера Firefox
             driver = webdriver.Firefox(service=service)
