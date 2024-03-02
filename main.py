@@ -1,142 +1,96 @@
-import re
-from datetime import datetime
-
-import requests
-from bs4 import BeautifulSoup
+import time
 
 from selenium import webdriver
-from selenium.webdriver.firefox.service import Service
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
+from selenium.common.exceptions import NoSuchElementException
+from selenium.webdriver.support.ui import Select
+from selenium.common.exceptions import WebDriverException
 
-from settings import SiteSettings
-
-
-def edit_pub(pub_id: str, text: str, driver, edit_url) -> None:
-    driver.get(edit_url + pub_id)
-    textarea = driver.find_element(By.NAME, 'FIELDS[PREVIEW_TEXT]')
-
-    textarea.clear()
-    textarea.send_keys(text)
-
-    # save_button = driver.find_element(By.CSS_SELECTOR, 'button[name="ACTION"][value="H"]')
-    save_button = driver.find_element(By.CSS_SELECTOR, 'button[name="ACTION"][value="Y"]')
-    save_button.click()
-    WebDriverWait(driver, 10).until(EC.staleness_of(save_button))
+import pub_dict
+from data import *
 
 
 def main():
-    site = SiteSettings()
-    # Начальные данные
-    driver_path = 'geckodriver'
-    login_url = 'https://infostart.ru/auth/?login=yes'
-    edit_url = 'https://infostart.ru/public/edit/?id='
-    pagination_url = 'https://infostart.ru/profile/public/?PAGEN_1='
-    pattern = r'\s\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\s-\s\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b'
-    start_year = 2018
+    # Создание экземпляра драйвера браузера Chrome
+    options = webdriver.ChromeOptions()
+    options.executable_path = driver_path
+    driver = webdriver.Chrome(options=options)
 
-    replacement_dict = {
-        '3.0.57.17 - 3.0.138.25': '3.0.57.17 - 3.0.140.20',  # Бухгалтерия предприятия
-        '1.6.13.38 - 3.0.4.88': '1.6.13.38 - 3.0.4.128',  # Управление нашей фирмой
-        '2.2.10.19 - 3.0.4.88': '2.2.10.19 - 3.0.4.128',  # Розница
-        '3.1.17.138 - 3.1.26.13': '3.1.17.138 - 3.1.26.13',  # ЗиКГУ и ЗУП
-        '3.1.8.216 - 3.1.26.13': '3.1.8.216 - 3.1.26.13',  # ЗиКГУ и ЗУП
-        '2.4.5.86 - 2.5.12.80': '2.4.5.86 - 2.5.12.87',  # Комплексная автоматизация
-        '2.4.7.151 - 2.5.12.80': '2.4.7.151 - 2.5.12.87',  # ERP Управление предприятием
-        '11.4.1.254 - 11.5.12.80': '11.4.1.254 - 11.5.12.87'  # Управление торговлей
-    }
+    # Открытие страницы
+    driver.get(login_url)
 
-    # Получение значений из конфигурационного файла
-    username = site.username.get_secret_value()
-    password = site.password.get_secret_value()
+    # Ожидание решения капчи вручную
+    input("Введите логин и пароль, затем нажмите Enter, после решения капчи...")
 
-    # Создаем сессию для работы с сайтом
-    session = requests.Session()
+    # Находим элементы для ввода логина и пароля
+    username_input = driver.find_element(By.NAME, 'USER_LOGIN')
+    password_input = driver.find_element(By.NAME, 'USER_PASSWORD')
 
-    # Выполняем GET-запрос для получения кук
-    response = session.get(login_url)
+    # Вводим логин и пароль
+    username_input.send_keys(username)
+    password_input.send_keys(password)
 
-    # Проверяем успешность выполнения GET-запроса
-    if response.status_code == 200:
-        # Отправляем POST-запрос на страницу авторизации с данными пользователя и куками
-        login_data = {
-            "AUTH_FORM": 'Y',
-            "TYPE": 'AUTH',
-            "USER_LOGIN": username,
-            "USER_PASSWORD": password,
-            'USER_REMEMBER': 'Y'
-        }
-        headers = {
-            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) "
-                          "Chrome/113.0.0.0 Safari/537.36",
-            "Referer": login_url
-        }
-        response = session.post(login_url, data=login_data, headers=headers, allow_redirects=True)
+    # Нажатие кнопки логина
+    login_button = driver.find_element(By.NAME, 'Login')
+    login_button.click()
 
-        # Проверяем успешность авторизации
-        if response.status_code == 200:
-            # Если авторизация прошла успешно, начинаем отбор публикаций для изменения
-            selected_urls = dict()
+    # Ожидание завершения авторизации
+    WebDriverWait(driver, 5).until(EC.staleness_of(login_button))
 
-            for i in range(1, 5):
-                response = session.get(pagination_url + str(i), allow_redirects=True)
-                # Обрабатываем полученные данные
-                if response.status_code == 200:
-                    html_content = response.content
-                    # Создаем объект BeautifulSoup для парсинга HTML
-                    soup = BeautifulSoup(html_content, 'html.parser')
+    # Сохранение куки в файл
+    cookies = driver.get_cookies()
+    with open('cookies.txt', 'w') as f:
+        for cookie in cookies:
+            f.write(f"{cookie['name']}={cookie['value']}\n")
 
-                    # Находим элементы, содержащие информацию о публикациях
-                    # publication_elements = soup.find_all('div', class_='publication-item')
-                    publication_elements = soup.select('div.publication-item:not(.unactive)')
+    selected_urls = pub_dict.gen_pub_dict()
+    print(f'Будет обновлено {len(selected_urls)} публикаций!')
 
-                    # Обходим элементы публикаций и извлекаем информацию
-                    for publication_element in publication_elements:
-                        # Извлекаем нужную информацию о публикации
-                        preview_text = publication_element.find('p', class_='public-preview-text-wrap').text.strip()
-                        link = publication_element.find('a', class_='font-md').attrs['href']
-                        date = publication_element.find('span', class_='text-nowrap').text.strip()
+    if selected_urls:
 
-                        # Преобразовываем дату в объект datetime
-                        publication_date = datetime.strptime(date, '%d.%m.%Y')
+        for key, value in selected_urls.items():
+            driver.get(edit_url + key)
+            textarea = driver.find_element(By.NAME, 'FIELDS[PREVIEW_TEXT]')
+            textarea.clear()
+            textarea.send_keys(value)
 
-                        # Проверяем, что год публикации больше или равен start_year
-                        if publication_date.year >= start_year and bool(re.search(pattern, preview_text)):
-                            for key, value in replacement_dict.items():
-                                if key in preview_text:
-                                    preview_text = preview_text.replace(key, value)
-                                    selected_urls[link.split('/')[2]] = preview_text
+            # # Ожидание появления хотя бы одного элемента select с таймаутом в 10 секунд
+            # select_elements = WebDriverWait(driver, 3).until(
+            #     EC.presence_of_all_elements_located((By.NAME, "FILES[CLASS_TYPE][]"))
+            # )
 
-                else:
-                    print("Не удалось получить данные:", response.status_code)
+            # Задаем значение, которое хотим выбрать
+            # value_to_select = "9329"
+            #
+            # # Проверяем, есть ли хотя бы один элемент
+            # if select_elements:
+            #     # Проходимся по каждому элементу и выбираем значение
+            #     for select_element in select_elements:
+            #         try:
+            #             # Пытаемся выбрать значение
+            #             select = Select(select_element)
+            #             select.select_by_value(value_to_select)
+            #         except WebDriverException as e:
+            #             # Обрабатываем исключение, если не удается выбрать значение
+            #             print(f"Не удалось выбрать значение в элементе select.")
+            # else:
+            #     print("Элементы select не найдены")
 
-            # Создаем экземпляр сервиса GeckoDriver
-            print(selected_urls.keys())
-            service = Service(executable_path=driver_path)
-            # Создать экземпляр драйвера браузера Firefox
-            driver = webdriver.Firefox(service=service)
+            try:
+                save_button = driver.find_element(By.CSS_SELECTOR, 'button[name="ACTION"][value="Y"]')
+            except NoSuchElementException:
+                print("Кнопка публикации не найдена")
+                try:
+                    save_button = driver.find_element(By.CSS_SELECTOR, 'button[name="ACTION"][value="M"]')
+                except NoSuchElementException:
+                    print("Кнопка модерации не найдена")
+            save_button.click()
+            WebDriverWait(driver, 20).until(EC.staleness_of(save_button))
 
-            driver.get(login_url)
-
-            # Находим элементы для ввода логина и пароля
-            username_input = driver.find_element(By.NAME, 'USER_LOGIN')
-            password_input = driver.find_element(By.NAME, 'USER_PASSWORD')
-
-            # Вводим логин и пароль
-            username_input.send_keys(username)
-            password_input.send_keys(password)
-            login_button = driver.find_element(By.NAME, 'Login')
-            login_button.click()
-            WebDriverWait(driver, 10).until(EC.staleness_of(login_button))
-            for key, value in selected_urls.items():
-                edit_pub(key, value, driver, edit_url)
-            driver.quit()
-
-        else:
-            print("Ошибка авторизации:", response.status_code)
-    else:
-        print("Ошибка при получении кук:", response.status_code)
+    # Закрытие браузера
+    driver.quit()
 
 
 if __name__ == '__main__':
